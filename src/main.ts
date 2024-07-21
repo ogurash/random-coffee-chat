@@ -3,6 +3,7 @@
 import { GroupGenerator, Grouping } from "./group_generator";
 import { SheetsAccessor } from "./sheets_accessor";
 import { MailSender } from "./mail_sender";
+import { CalendarEventCreator } from "./calendar_event_creator";
 
 const sheetConfig = {
     spreadsheetId: '<Your spreadsheet ID here>',
@@ -10,7 +11,7 @@ const sheetConfig = {
     historyDataSheetName: 'History',
 };
 
-const emailConfig = {
+const groupEmailConfig = {
     subject: 'Next week\'s group',
     body: `
 You are in a group with the following members:
@@ -18,6 +19,26 @@ You are in a group with the following members:
 
 Please schedule a meeting in the week of {{MONDAY}}.
 `,
+};
+
+const noMatchingEmailConfig = {
+    subject: 'No group is available',
+    body: `
+You are not in a group in the week of {{MONDAY}}. Please wait for the next grouping.
+    `
+};
+
+const groupEventConfig = {
+    calendarId: '<Your calendar ID here>',
+
+    summary: 'Group Meeting',
+    description: 'This is a group meeting.',
+    durationMinutes: 30,
+    timeZone: 'Asia/Tokyo',
+
+    // Event start time offset from Monday midnight in minutes.
+    // Defalt time is Wednesday 11:30.
+    eventTimeOffsetMinutes: 3 * 24 * 60 + 11 * 60 + 30,
 };
 
 function buildGroupGeneratorConfig(members: string[], weights: Map<string, number>) {
@@ -65,22 +86,49 @@ function run() {
     const history = accessor.getHistory(members);
     const weights = convertHistoryToWeights(history);
 
+    // If the number of members is odd, drop one member randomly.
+    const droppedMembers = [];
+    if (members.length % 2 === 1) {
+        console.log('Dropping one member to make the number of members even.');
+        const droppedIndex = Math.floor(Math.random() * members.length);
+        droppedMembers.push(members[droppedIndex]);
+        members.slice(droppedIndex, 1);
+    }
+
     // Generate groups.
     const config = buildGroupGeneratorConfig(members, weights);
     const generator = new GroupGenerator(config);
     const grouping = generator.generateGroups();
     console.log('Total weight: ' + grouping.totalWeight);
 
-    // Send emails to the members.
+    // Send emails to the members who are not in a group.
     const nextMonday = formatNextMonday();
-    const mailSender = new MailSender(emailConfig);
+    if (droppedMembers.length > 0) {
+        const mailSender = new MailSender(noMatchingEmailConfig);
+        mailSender.sendMail(droppedMembers, new Map([
+            ['{{MONDAY}}', nextMonday],
+        ]));
+    }
+
+    // Send emails to the members.
+    const calendarEventCreator = new CalendarEventCreator(groupEventConfig.calendarId);
+    const mailSender = new MailSender(groupEmailConfig);
     grouping.groups.forEach((group, i) => {
         const groupMembers = group.memberIndices.map(index => grouping.members[index]);
         const replacements = new Map<string, string>([
             ['{{GROUP}}', groupMembers.join(', ')],
             ['{{MONDAY}}', nextMonday],
         ]);
-        mailSender.sendMail(groupMembers, replacements);    
+        const eventTime = new Date(new Date(nextMonday).getTime() + groupEventConfig.eventTimeOffsetMinutes * 60 * 1000);
+        calendarEventCreator.createEvent({
+            summary: groupEventConfig.summary,
+            description: groupEventConfig.description,
+            start: eventTime,
+            durationMinutes: groupEventConfig.durationMinutes,
+            timeZone: groupEventConfig.timeZone,
+            members: groupMembers,
+        });
+        mailSender.sendMail(groupMembers, replacements);
     });
 
     // Record the grouping to the sheet.
@@ -89,4 +137,4 @@ function run() {
     console.log('Done: ' + nextMonday);
 }
 
-run();
+// run();

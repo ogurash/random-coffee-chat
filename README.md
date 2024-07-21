@@ -32,25 +32,30 @@ npm install
 npx clasp login
 ```
 
-4. Push the code to the new project:
+4. Create a new project in Google Apps Script, via https://script.google.com/home/my
+
+5. Copy the script ID and put it in .clasp.json
+
+6. Build and push the code to the new project:
 
 ```bash
-npx clasp push
+npm run build
+npm run push
 ```
 
-5. Open the project in the browser:
+7. Open the project in the browser:
 
 ```bash
 npx clasp open
 ```
 
-6. Create a new Google Sheet and add your team members' email addresses in column A.
+8. Create a new Google Sheet and add your team members' email addresses in column A.
 
-7. Copy the Sheet ID from the URL and paste it into the `SPREADSHEET_ID` variable in `src/index.ts`.
+9. Copy the Sheet ID from the URL and paste it into the `SPREADSHEET_ID` variable in `src/index.ts`.
 
-8. Set up the time-driven trigger to run the `sendRandomCoffeeChat` function once a week.
+10. Set up the time-driven trigger to run the `sendRandomCoffeeChat` function once a week.
 
-9. Run the script manually for the first time to send the initial emails.
+11. Run the script manually for the first time to send the initial emails.
 
 ## License
 
